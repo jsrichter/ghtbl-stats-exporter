@@ -246,7 +246,6 @@ let S = {
   loadMsg: '',
   availableSeasons: [],
   availableTeams: [],
-  missingPlayerIds: [],
   statsSort: {}
 };
 
@@ -521,18 +520,6 @@ function phpUnserialize(str){
   let i = 0;
   function readLen(){ let s=''; while(str[i]!==':') s+=str[i++]; i++; return parseInt(s); }
   function readUntil(ch){ let s=''; while(i<str.length&&str[i]!==ch) s+=str[i++]; i++; return s; }
-  // PHP lengths are UTF-8 byte counts; JavaScript indexes UTF-16 code units.
-  function readUtf8Bytes(byteLength){
-    const start=i;
-    let bytes=0;
-    while(i<str.length&&bytes<byteLength){
-      const cp=str.codePointAt(i);
-      bytes+=cp<=0x7f?1:cp<=0x7ff?2:cp<=0xffff?3:4;
-      i+=cp>0xffff?2:1;
-    }
-    if(bytes!==byteLength) throw new Error('Invalid PHP serialized string length');
-    return str.slice(start,i);
-  }
   function parse(){
     const t=str[i++]; i++; // type + ':'
     if(t==='a'){
@@ -548,7 +535,7 @@ function phpUnserialize(str){
       return o;
     } else if(t==='s'){
       const l=readLen(); i++; // '"'
-      const s=readUtf8Bytes(l); i+=2; // '"' + ';'
+      const s=str.substr(i,l); i+=l; i+=2; // '"' + ';'
       return s;
     } else if(t==='i'){
       return parseInt(readUntil(';'));
@@ -677,20 +664,8 @@ function handleFile(e){
       try{
         const parser=new DOMParser();
         const doc=parser.parseFromString(ev.target.result,'text/xml');
-        if(doc.getElementsByTagName('parsererror').length)
-          throw new Error('The selected file is not valid XML.');
         S.loadMsg='Building game index…';
         const {games,players,teams}=parseXML(doc);
-        const referencedPlayerIds=new Set();
-        for(const game of games)
-          for(const teamRows of Object.values(game.playerData||{}))
-            for(const pid of Object.keys(teamRows||{}))
-              if(pid!=='0') referencedPlayerIds.add(String(pid));
-        S.missingPlayerIds=[...referencedPlayerIds]
-          .filter(pid=>!players[pid])
-          .sort((a,b)=>Number(a)-Number(b));
-        for(const pid of S.missingPlayerIds)
-          players[pid]={name:`Unknown player (missing sp_player #${pid})`,pos:'',num:'',bt:''};
         S.games=games; S.players=players; S.teams=teams;
         S.availableSeasons=[...new Set(games.map(g=>g.season).filter(Boolean))].sort();
         S.availableTeams=[...new Set(Object.values(teams))].sort();
@@ -781,9 +756,6 @@ function renderGameList(){
   const games=getFiltered();
   if(games.length===0) return `<div class="no-data"><i class="ti ti-mood-empty" style="font-size:2rem;margin-bottom:.5rem;display:block"></i>No games match filters.</div>`;
   return `
-  ${S.missingPlayerIds.length?`<div style="margin-bottom:1rem;padding:.85rem 1rem;border:1px solid #9a6b20;border-radius:8px;background:rgba(154,107,32,.12);color:#e5bd76;font-size:.82rem">
-    <strong>Incomplete player records:</strong> ${S.missingPlayerIds.length} player IDs used by game statistics have no matching <code>sp_player</code> item in this XML export. Their stats are preserved and labeled with the missing ID; names cannot be recovered from this file.
-  </div>`:''}
   ${renderDashboard(games)}
   <div class="game-count">${games.length} game${games.length!==1?'s':''} · click to view box score</div>
   <div class="game-list">
