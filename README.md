@@ -39,6 +39,12 @@ The tool expects SportsPress metadata such as:
 - `sp_status`
 - `sp_metrics`
 
+Every player ID stored in an event's `sp_players` metadata must also have a
+corresponding `sp_player` item in the export. If WordPress omits a player record,
+the event still contains that player's numeric ID and statistics but contains no
+name. The app preserves those rows, labels them with the missing ID, and shows an
+incomplete-record warning.
+
 ## Hosting On GitHub Pages
 
 This project can be hosted directly with GitHub Pages because it is a static HTML app.
