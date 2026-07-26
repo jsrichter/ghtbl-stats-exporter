@@ -723,7 +723,8 @@ function renderToolbar(){
     <button class="btn btn-ghost btn-sm rounded-md ring-1 ring-white/10 hover:bg-white/10" onclick="S.filters={season:'',seasonType:'',team:'',dateFrom:'',dateTo:''};S.selectedGame=null;render()"><i class="ti ti-refresh" aria-hidden="true"></i></button>
     ${S.selectedGame?`<button class="btn btn-ghost btn-sm rounded-md ring-1 ring-white/10 hover:bg-white/10" onclick="S.selectedGame=null;render()"><i class="ti ti-list" aria-hidden="true"></i> All games</button>`:''}
     ${S.view==='flat'
-      ? `<button class="btn btn-accent btn-sm rounded-md shadow-sm shadow-black/20 hover:opacity-90" onclick="exportFlatStats()" ${getFiltered().length===0?'disabled':''}><i class="ti ti-table-export" aria-hidden="true"></i> Export flat</button>`
+      ? `<button class="btn btn-accent btn-sm rounded-md shadow-sm shadow-black/20 hover:opacity-90" onclick="exportFlatStats()" ${getFiltered().length===0?'disabled':''}><i class="ti ti-file-spreadsheet" aria-hidden="true"></i> XLSX</button>
+         <button class="btn btn-ghost btn-sm rounded-md ring-1 ring-white/10 hover:bg-white/10" onclick="exportFlatStatsCSV()" ${getFiltered().length===0?'disabled':''}><i class="ti ti-file-type-csv" aria-hidden="true"></i> CSV</button>`
       : S.selectedGame?`<button class="btn btn-accent btn-sm rounded-md shadow-sm shadow-black/20 hover:opacity-90" onclick="exportCurrent()"><i class="ti ti-download" aria-hidden="true"></i> Export</button>`:`<button class="btn btn-accent btn-sm rounded-md shadow-sm shadow-black/20 hover:opacity-90" onclick="exportAll()" ${getFiltered().length===0?'disabled':''}><i class="ti ti-download" aria-hidden="true"></i> Export all</button>`}
   </div>`;
 }
@@ -837,7 +838,8 @@ function renderFlatStats(){
         <div class="flat-title">Cleaned Flat Stats</div>
         <div class="flat-sub">${games.length} filtered game${games.length!==1?'s':''}</div>
       </div>
-      <button class="btn btn-accent btn-sm rounded-md shadow-sm shadow-black/20 hover:opacity-90" onclick="exportFlatStats()"><i class="ti ti-table-export" aria-hidden="true"></i> Export flat</button>
+      <button class="btn btn-accent btn-sm rounded-md shadow-sm shadow-black/20 hover:opacity-90" onclick="exportFlatStats()"><i class="ti ti-file-spreadsheet" aria-hidden="true"></i> Export XLSX</button>
+      <button class="btn btn-ghost btn-sm rounded-md ring-1 ring-white/10 hover:bg-white/10" onclick="exportFlatStatsCSV()"><i class="ti ti-file-type-csv" aria-hidden="true"></i> Export CSV</button>
     </div>
   </div>`;
 }
@@ -1148,10 +1150,10 @@ function exportCurrent(){
   XLSX.writeFile(wb,`BoxScore_${S.selectedGame.post_date}_${(S.selectedGame.away_name+'_vs_'+S.selectedGame.home_name).replace(/[^a-zA-Z0-9_]/g,'_')}.xlsx`);
 }
 
-function buildFlatStatsSheet(wb, games){
+function buildFlatStatsData(games){
   const {rows,cols}=buildFlatStats(games);
   const headers=['gameID','season','date','team name','player id','player name',...cols];
-  const data=[headers,...rows.map(r=>[
+  return {cols,data:[headers,...rows.map(r=>[
     r.gameID,
     r.season,
     r.date,
@@ -1159,7 +1161,11 @@ function buildFlatStatsSheet(wb, games){
     r.playerID,
     r.playerName,
     ...cols.map(c=>rawStatVal(r.stats,c))
-  ])];
+  ])]};
+}
+
+function buildFlatStatsSheet(wb, games){
+  const {cols,data}=buildFlatStatsData(games);
   const ws=XLSX.utils.aoa_to_sheet(data);
   ws['!cols']=[
     {wch:12},
@@ -1180,6 +1186,28 @@ function exportFlatStats(){
   buildFlatStatsSheet(wb,games);
   const label=S.filters.season||'All';
   XLSX.writeFile(wb,`GHTBL_FlatStats_${label}.xlsx`);
+}
+
+function exportFlatStatsCSV(){
+  const games=getFiltered();
+  if(!games.length) return;
+  const {data}=buildFlatStatsData(games);
+  const csvCell=value=>{
+    let text=value===undefined||value===null?'':String(value);
+    // Prevent spreadsheet applications from evaluating imported text as formulas.
+    if(/^[=+\-@]/.test(text)) text="'"+text;
+    return `"${text.replace(/"/g,'""')}"`;
+  };
+  const csv='\uFEFF'+data.map(row=>row.map(csvCell).join(',')).join('\r\n');
+  const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  const link=document.createElement('a');
+  const label=S.filters.season||'All';
+  link.href=url;
+  link.download=`GHTBL_FlatStats_${label}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function exportAll(){
