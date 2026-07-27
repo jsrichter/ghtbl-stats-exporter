@@ -232,6 +232,7 @@ const STAT_ALIASES = {
 };
 const PITCH_COLS   = ['pitcher_ip','pitcher_h','pitcher_r','pitcher_er','pitcher_bb','pitcher_so','pitcher_hr','pitcher_hbp','pitcher_gs','pitcher_w','pitcher_l','pitcher_sv','pitcher_cg','pitcher_sho'];
 const PITCH_LABELS = {pitcher_ip:'IP',pitcher_h:'H',pitcher_r:'R',pitcher_er:'ER',pitcher_bb:'BB',pitcher_so:'SO',pitcher_hr:'HR',pitcher_hbp:'HBP',pitcher_gs:'GS',pitcher_w:'W',pitcher_l:'L',pitcher_sv:'SV',pitcher_cg:'CG',pitcher_sho:'SHO'};
+const CSV_NUMERIC_STAT_FIELDS = new Set(['batting_g','pitching_g',...BATTING_COLS,...PITCH_COLS]);
 
 let S = {
   step:'upload', // upload | list
@@ -244,6 +245,7 @@ let S = {
   selectedGame: null,
   loading: false,
   loadMsg: '',
+  loadError: '',
   availableSeasons: [],
   availableTeams: [],
   statsSort: {}
@@ -380,10 +382,19 @@ function rawStatVal(stats,key){
 }
 function csvStatVal(stats,key){
   const val=rawStatVal(stats,key);
-  if(key!=='pitcher_ip'||val==='') return val;
-  const match=String(val).trim().match(/^(?:(\d+)\s+)?([12])\/3$/);
-  if(!match) return val;
-  return `${parseInt(match[1]||'0',10)}.${match[2]}`;
+  if(!CSV_NUMERIC_STAT_FIELDS.has(key)||val==='') return val;
+  let text=String(val).trim();
+  if(key==='pitcher_ip'){
+    const match=text.match(/^(?:(\d+)\s+)?([12])\/3$/);
+    if(match) text=`${parseInt(match[1]||'0',10)}.${match[2]}`;
+  }
+  return /^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(text) ? text : '';
+}
+function csvCell(value,isNumericStat=false){
+  let text=value===undefined||value===null?'':String(value);
+  // Prevent spreadsheet applications from evaluating imported text as formulas.
+  if(!isNumericStat&&/^[=+\-@]/.test(text)) text="'"+text;
+  return `"${text.replace(/"/g,'""')}"`;
 }
 function gameSeasonType(g){
   const text=[g.season,g.league,g.title].join(' ').toLowerCase();
@@ -677,25 +688,33 @@ function parseXML(doc){
 
 function handleFile(e){
   const file=e.target.files[0]; if(!file) return;
-  S.loading=true; S.loadMsg='Reading file…'; render();
+  S.loading=true; S.loadMsg='Reading file…'; S.loadError=''; render();
   const reader=new FileReader();
+  const fail=message=>{
+    S.loading=false; S.loadError=message; render();
+  };
   reader.onload=ev=>{
     S.loadMsg='Parsing XML…'; render();
     setTimeout(()=>{
       try{
         const parser=new DOMParser();
         const doc=parser.parseFromString(ev.target.result,'text/xml');
+        if(doc.getElementsByTagName('parsererror').length)
+          throw new Error('The selected file is not valid XML.');
         S.loadMsg='Building game index…';
         const {games,players,teams}=parseXML(doc);
+        if(games.length===0 && Object.keys(players).length===0 && Object.keys(teams).length===0)
+          throw new Error('This XML does not contain any supported SportsPress teams, players, or events.');
         S.games=games; S.players=players; S.teams=teams;
         S.availableSeasons=[...new Set(games.map(g=>g.season).filter(Boolean))].sort();
         S.availableTeams=[...new Set(Object.values(teams))].sort();
         S.loading=false; S.step='list'; render();
       }catch(err){
-        S.loading=false; S.loadMsg='Error: '+err.message; render();
+        fail(err.message);
       }
     },30);
   };
+  reader.onerror=()=>fail('The selected file could not be read. Please try again.');
   reader.readAsText(file);
 }
 
@@ -770,7 +789,8 @@ function renderUpload(){
       : `<i class="ti ti-file-upload upload-icon" aria-hidden="true"></i>
          <div class="upload-title">Drop WordPress XML or click to browse</div>
          <div class="upload-sub">Single export file containing events, players &amp; teams</div>
-         <span class="upload-badge">sp_event · sp_player · sp_team</span>`}
+         <span class="upload-badge">sp_event · sp_player · sp_team</span>
+         ${S.loadError?`<div class="upload-sub" style="color:#ff9b9b;margin-top:.75rem">${escH(S.loadError)}</div>`:''}`}
   </div>`;
 }
 
@@ -1212,14 +1232,10 @@ function exportFlatStats(){
 function exportFlatStatsCSV(){
   const games=getFiltered();
   if(!games.length) return;
-  const {data}=buildFlatStatsData(games,csvStatVal);
-  const csvCell=value=>{
-    let text=value===undefined||value===null?'':String(value);
-    // Prevent spreadsheet applications from evaluating imported text as formulas.
-    if(/^[=+\-@]/.test(text)) text="'"+text;
-    return `"${text.replace(/"/g,'""')}"`;
-  };
-  const csv='\uFEFF'+data.map(row=>row.map(csvCell).join(',')).join('\r\n');
+  const {cols,data}=buildFlatStatsData(games,csvStatVal);
+  const csv='\uFEFF'+data.map(row=>row.map((value,index)=>
+    csvCell(value,index>=6&&CSV_NUMERIC_STAT_FIELDS.has(cols[index-6]))
+  ).join(',')).join('\r\n');
   const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   const link=document.createElement('a');
   const label=S.filters.season||'All';
