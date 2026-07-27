@@ -378,6 +378,13 @@ function rawStatVal(stats,key){
   const val=stats ? stats[key] : '';
   return val===undefined||val===null ? '' : val;
 }
+function csvStatVal(stats,key){
+  const val=rawStatVal(stats,key);
+  if(key!=='pitcher_ip'||val==='') return val;
+  const match=String(val).trim().match(/^(?:(\d+)\s+)?([12])\/3$/);
+  if(!match) return val;
+  return `${parseInt(match[1]||'0',10)}.${match[2]}`;
+}
 function gameSeasonType(g){
   const text=[g.season,g.league,g.title].join(' ').toLowerCase();
   return /(playoff|postseason|championship|final|semifinal|quarterfinal|wild card)/.test(text) ? 'playoff' : 'regular';
@@ -1164,7 +1171,7 @@ function exportCurrent(){
   XLSX.writeFile(wb,`BoxScore_${S.selectedGame.post_date}_${(S.selectedGame.away_name+'_vs_'+S.selectedGame.home_name).replace(/[^a-zA-Z0-9_]/g,'_')}.xlsx`);
 }
 
-function buildFlatStatsData(games){
+function buildFlatStatsData(games, statValue=rawStatVal){
   const {rows,cols}=buildFlatStats(games);
   const headers=['gameID','season','date','team name','player id','player name',...cols];
   return {cols,data:[headers,...rows.map(r=>[
@@ -1174,7 +1181,7 @@ function buildFlatStatsData(games){
     r.teamName,
     r.playerID,
     r.playerName,
-    ...cols.map(c=>rawStatVal(r.stats,c))
+    ...cols.map(c=>statValue(r.stats,c))
   ])]};
 }
 
@@ -1205,7 +1212,7 @@ function exportFlatStats(){
 function exportFlatStatsCSV(){
   const games=getFiltered();
   if(!games.length) return;
-  const {data}=buildFlatStatsData(games);
+  const {data}=buildFlatStatsData(games,csvStatVal);
   const csvCell=value=>{
     let text=value===undefined||value===null?'':String(value);
     // Prevent spreadsheet applications from evaluating imported text as formulas.
