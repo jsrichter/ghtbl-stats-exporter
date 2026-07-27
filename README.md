@@ -9,6 +9,7 @@ A browser-based tool for turning a WordPress/SportsPress XML export into basebal
 - Generates game box scores with batting and pitching sections.
 - Exports box scores to `.xlsx`.
 - Exports cleaned flat stats as XLSX or CSV with game, season, date, team, player, and stat columns.
+- Derives separate batting and pitching games-played indicators from each game appearance.
 - Provides filtered dashboards and stat leaderboards for teams and players.
 
 ## Data Privacy
