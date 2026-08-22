@@ -14,6 +14,58 @@ time.
 
 ## Tasks
 
+### 1B. Identify regular-season and playoff games in flat exports
+
+Status: complete
+
+Goal: Add an explicit game-type column to each exported flat-stat row so users
+can distinguish regular-season records from playoff records.
+
+Files:
+
+- `index.html`
+
+Implementation:
+
+- Reuse the existing `gameSeasonType(game)` classifier so exported values match
+  the regular/playoff filter already shown in the UI.
+- Carry the classified value into every player row emitted by `buildFlatStats`.
+- Add a `game type` metadata column to `buildFlatStatsData`, before the dynamic
+  statistic columns, with values `regular` or `playoff`.
+- Keep CSV numeric-field handling aligned with the new metadata-column count so
+  stat validation and formula hardening continue to apply to the right columns.
+- Keep the change localized to flat CSV/XLSX data generation; do not alter XML
+  parsing, classification rules, box-score exports, dashboards, or filters.
+
+Acceptance checks:
+
+- Every flat CSV data row has a `game type` value.
+- A known Playoff Tournament event exports `playoff` and a known regular-season
+  event exports `regular`.
+- The CSV header and every data row have the same number of columns.
+- Valid negative numeric stats remain numeric-looking, malformed numeric stats
+  remain blank, and text-field formula hardening still works after the offset
+  change.
+- The flat XLSX export uses the same metadata layout and remains valid.
+- `git diff --check` passes.
+
+Implementation notes:
+
+- Added `gameSeasonType(g)` to every player row built by `buildFlatStats` and
+  exposed it as `game type`, the seventh flat-export metadata column, in both
+  CSV and XLSX data.
+- Shifted CSV numeric-stat detection from six to seven metadata columns and
+  added a matching XLSX column width, leaving stat ordering and all non-flat
+  export paths unchanged.
+- A headless-browser check against the application functions passed regular and
+  playoff classification, equal header/data column counts, valid negative and
+  malformed numeric handling, text formula hardening, XLSX metadata placement,
+  and XLSX workbook serialization.
+- The supplied export contains representative player-stat events 26926
+  (`Jets @ Mets`, Regular Season) and 27693 (`Playoff Game 1`, Playoff
+  Tournament), which exercise the classifier's `regular` and `playoff` paths.
+- `git diff --check` passes.
+
 ### 1A. Make CSV numeric fields compatible with Microsoft Access
 
 Status: complete
@@ -230,24 +282,26 @@ Acceptance checks:
 
 ## Coder Handoff
 
-Implement Task 1A only.
+Implement Task 1B only.
 
 - Read `.agents/coder.md` and this file before editing.
-- Keep the patch localized to CSV value serialization.
-- Do not modify XLSX or display behavior and do not begin other tasks.
-- Exercise every acceptance scenario in Task 1A, including the reported rows.
-- Mark Task 1A complete here only after those checks pass.
-- Record assumptions and checks directly under Task 1A.
+- Keep the patch localized to flat export row/data construction and the CSV
+  numeric-column offset.
+- Reuse `gameSeasonType`; do not redesign or broaden its classifier.
+- Exercise every acceptance scenario in Task 1B.
+- Mark Task 1B complete here only after those checks pass.
+- Record assumptions and checks directly under Task 1B.
 
 ## Checker Handoff
 
-Review the coder's Task 1A changes only.
+Review the coder's Task 1B changes only.
 
 - Read `.agents/checker.md`, this file, and the final diff.
-- Verify all Task 1A acceptance checks against the reported CSV records.
-- Confirm valid negative and decimal values remain numeric-looking.
-- Confirm malformed numeric tokens become blank without weakening formula
-  hardening for text fields.
-- Check that XLSX and display paths are unchanged.
+- Verify every Task 1B acceptance check, including representative regular and
+  playoff events from the supplied fixture/export.
+- Confirm the inserted metadata column does not shift CSV numeric validation or
+  weaken text formula hardening.
+- Confirm unrelated display, filtering, parsing, and box-score behavior is
+  unchanged.
 - Write findings and test evidence to `REVIEW.md`; distinguish blocking findings
   from optional follow-ups.

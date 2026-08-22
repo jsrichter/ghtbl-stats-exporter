@@ -363,7 +363,7 @@ function buildFlatStats(games){
           batting_g:isBattingAppearance(stats)?1:0,
           pitching_g:isPitchingAppearance(stats)?1:0
         };
-        const row={gameID:g.post_id,season:g.season,date:g.post_date,teamName:team.name,playerID:pid,playerName:pi.name,stats:exportStats};
+        const row={gameID:g.post_id,season:g.season,date:g.post_date,teamName:team.name,playerID:pid,playerName:pi.name,gameType:gameSeasonType(g),stats:exportStats};
         visibleStatKeys(exportStats).forEach(k=>statKeys.add(k));
         rows.push(row);
       }
@@ -1193,7 +1193,7 @@ function exportCurrent(){
 
 function buildFlatStatsData(games, statValue=rawStatVal){
   const {rows,cols}=buildFlatStats(games);
-  const headers=['gameID','season','date','team name','player id','player name',...cols];
+  const headers=['gameID','season','date','team name','player id','player name','game type',...cols];
   return {cols,data:[headers,...rows.map(r=>[
     r.gameID,
     r.season,
@@ -1201,6 +1201,7 @@ function buildFlatStatsData(games, statValue=rawStatVal){
     r.teamName,
     r.playerID,
     r.playerName,
+    r.gameType,
     ...cols.map(c=>statValue(r.stats,c))
   ])]};
 }
@@ -1215,6 +1216,7 @@ function buildFlatStatsSheet(wb, games){
     {wch:24},
     {wch:10},
     {wch:24},
+    {wch:12},
     ...cols.map(c=>({wch:Math.max(8,Math.min(18,String(c).length+2))}))
   ];
   XLSX.utils.book_append_sheet(wb,ws,'Flat Stats');
@@ -1234,7 +1236,7 @@ function exportFlatStatsCSV(){
   if(!games.length) return;
   const {cols,data}=buildFlatStatsData(games,csvStatVal);
   const csv='\uFEFF'+data.map(row=>row.map((value,index)=>
-    csvCell(value,index>=6&&CSV_NUMERIC_STAT_FIELDS.has(cols[index-6]))
+    csvCell(value,index>=7&&CSV_NUMERIC_STAT_FIELDS.has(cols[index-7]))
   ).join(',')).join('\r\n');
   const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   const link=document.createElement('a');

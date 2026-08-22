@@ -1,12 +1,12 @@
-# Task 1A Review
+# Task 1B Review
 
 ## Conclusion
 
-Approved. No blocking issues were found in the Task 1A patch.
+Approved. No blocking issues were found in the Task 1B patch.
 
-The new normalization is confined to CSV serialization. It removes malformed
-text from known numeric columns, preserves valid numeric-looking output, and
-retains formula hardening for text fields.
+The new `game type` field is present in flat CSV and XLSX output, uses the
+existing UI classifier, and does not disturb numeric CSV validation or text
+formula hardening.
 
 ## Blocking Issues
 
@@ -15,40 +15,39 @@ None.
 ## Verification Evidence
 
 - `git diff --check` passes.
-- The supplied `GHTBL_FlatStats_All (5).csv` was imported and the reported
-  Access data-record numbers were checked using record number minus one as the
-  zero-based data-row index:
-  - 10,935: `bb` contains formula-hardened `'-1`.
-  - 10,958: `pitcher_cg` contains `o`.
-  - 11,771: `pitcher_l` contains `1` followed by a backtick.
-  - 12,721: `r` contains `1` followed by a backtick.
-  - 17,172: `pitcher_ip` contains `3` followed by a backtick.
-  - 18,988: `bb` contains a lone backtick.
-  - 20,231: `pitcher_h` contains `0=`.
-  - 22,891: `pitcher_hbp` contains `q`.
-- A temporary headless Edge harness executed the actual `csvStatVal` and
-  `csvCell` functions from `index.html`; all 20 assertions passed:
-  - Numeric-looking values `-1`, `0`, `.1`, and `2.1` remained unchanged.
-  - Innings `1/3`, `2/3`, `2 1/3`, and `2 2/3` normalized to `0.1`, `0.2`,
-    `2.1`, and `2.2`.
-  - Each of the seven malformed token forms above became blank, including both
-    occurrences of the backtick-suffixed `1`.
-  - Text beginning with `=`, `+`, `-`, and `@` received the leading
-    formula-hardening apostrophe.
-  - A numeric `-1` passed through `csvCell` without an apostrophe.
-- `CSV_NUMERIC_STAT_FIELDS` is built from the existing batting, pitching, and
-  derived games-played field lists, covering each affected reported column.
-- CSV column classification uses the `cols` returned by the same
-  `buildFlatStatsData` call, so dynamic stat-column ordering remains aligned
-  with the serialized values.
-- XLSX behavior is unchanged:
-  - `buildFlatStatsSheet` still calls `buildFlatStatsData(games)` with its
-    default `rawStatVal`.
-  - Only `exportFlatStatsCSV` passes `csvStatVal` and calls `csvCell`.
-- Display behavior is unchanged: neither CSV helper is referenced by render,
-  dashboard, stat aggregation, or box-score paths.
+- A temporary headless Chrome harness executed the actual application functions
+  from `index.html`. All 14 assertions passed:
+  - `gameSeasonType` returned `playoff` for a Playoff Tournament game and
+    `regular` for a Regular Season game.
+  - `buildFlatStatsData` placed `game type` in column 7 and populated every
+    emitted player row with one of the two expected values.
+  - The CSV header and both synthetic data rows had the same 13-column width.
+  - A numeric `bb=-1` remained `"-1"` without a formula-hardening apostrophe.
+  - A malformed numeric `r=bad` became blank.
+  - A player-name text field beginning with `-` retained formula hardening.
+  - The XLSX sheet placed `game type` in cell G1, placed `playoff` and `regular`
+    in G2 and G3, and had column-width metadata for every output column.
+  - SheetJS serialized the workbook successfully to a valid ZIP-based XLSX
+    byte array (17,889 bytes with the expected `PK` signature).
+- The supplied `GHTBL-export.xml` independently confirms the representative
+  records used by the plan:
+  - Event 26926 is `Jets @ Mets`, season `2026`, league `Regular Season`.
+  - Event 27693 is `Playoff Game 1`, season `2026`, league
+    `Playoff Tournament`.
+  These league values exercise the existing classifier's `regular` and
+  `playoff` outcomes respectively.
+- Code inspection confirms the CSV stat offset moved consistently from six to
+  seven metadata columns: stat lookup now uses `cols[index-7]`, matching the
+  inserted column in `buildFlatStatsData`.
+- The XLSX builder continues to consume the same `buildFlatStatsData` layout
+  and now includes a seventh metadata width before dynamic stat widths.
+- The production diff is localized to `buildFlatStats`, flat data/sheet
+  construction, and flat CSV stat-column indexing. XML parsing, the
+  `gameSeasonType` rules, filters, dashboards, and box-score exports are
+  unchanged.
 
 ## Optional Follow-ups
 
-- Task 3 should preserve these cases in a permanent dependency-free test suite;
-  the executable harness used for this review was temporary and was removed.
+- Preserve these checks in the permanent dependency-free test suite proposed
+  by Task 3. The executable browser harness used for this review was temporary
+  and removed after verification.
