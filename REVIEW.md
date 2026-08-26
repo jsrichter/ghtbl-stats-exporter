@@ -1,12 +1,12 @@
-# Task 1B Review
+# Task 1C Review
 
 ## Conclusion
 
-Approved. No blocking issues were found in the Task 1B patch.
+Approved. No blocking issues were found in the Task 1C patch.
 
-The new `game type` field is present in flat CSV and XLSX output, uses the
-existing UI classifier, and does not disturb numeric CSV validation or text
-formula hardening.
+The new `team side` field is consistently populated for away and home player
+rows, is shared by flat CSV and XLSX data, and preserves the existing CSV
+numeric/text handling boundary.
 
 ## Blocking Issues
 
@@ -15,39 +15,37 @@ None.
 ## Verification Evidence
 
 - `git diff --check` passes.
-- A temporary headless Chrome harness executed the actual application functions
-  from `index.html`. All 14 assertions passed:
-  - `gameSeasonType` returned `playoff` for a Playoff Tournament game and
-    `regular` for a Regular Season game.
-  - `buildFlatStatsData` placed `game type` in column 7 and populated every
-    emitted player row with one of the two expected values.
-  - The CSV header and both synthetic data rows had the same 13-column width.
-  - A numeric `bb=-1` remained `"-1"` without a formula-hardening apostrophe.
-  - A malformed numeric `r=bad` became blank.
-  - A player-name text field beginning with `-` retained formula hardening.
-  - The XLSX sheet placed `game type` in cell G1, placed `playoff` and `regular`
-    in G2 and G3, and had column-width metadata for every output column.
-  - SheetJS serialized the workbook successfully to a valid ZIP-based XLSX
-    byte array (17,889 bytes with the expected `PK` signature).
-- The supplied `GHTBL-export.xml` independently confirms the representative
-  records used by the plan:
-  - Event 26926 is `Jets @ Mets`, season `2026`, league `Regular Season`.
-  - Event 27693 is `Playoff Game 1`, season `2026`, league
-    `Playoff Tournament`.
-  These league values exercise the existing classifier's `regular` and
-  `playoff` outcomes respectively.
-- Code inspection confirms the CSV stat offset moved consistently from six to
-  seven metadata columns: stat lookup now uses `cols[index-7]`, matching the
-  inserted column in `buildFlatStatsData`.
-- The XLSX builder continues to consume the same `buildFlatStatsData` layout
-  and now includes a seventh metadata width before dynamic stat widths.
-- The production diff is localized to `buildFlatStats`, flat data/sheet
-  construction, and flat CSV stat-column indexing. XML parsing, the
-  `gameSeasonType` rules, filters, dashboards, and box-score exports are
-  unchanged.
+- Code-path review confirms `buildFlatStats` assigns `side: 'away'` to the
+  existing away-team entry and `side: 'home'` to the existing home-team entry,
+  then copies that value to every emitted player row as `teamSide`.
+- `buildFlatStatsData` inserts exactly one `team side` header immediately after
+  `team name`, and inserts `r.teamSide` at the same position in every data row.
+  The shared data builder is still used by both CSV and XLSX exports, so the two
+  formats receive the same layout.
+- The metadata layout now has eight fields. CSV numeric detection was shifted
+  consistently to `index >= 8` and `cols[index - 8]`; therefore the first
+  dynamic statistic maps to `cols[0]`, valid negative numeric values continue
+  to bypass text formula hardening, and malformed known numeric values are
+  still blanked by `csvStatVal`.
+- Text metadata remains outside the numeric-stat branch. A formula-like player
+  name at column 7 (zero-based index 6) still passes through `csvCell` with
+  `isNumericStat=false` and retains formula hardening.
+- The existing `game type` field remains populated by the unchanged
+  `gameSeasonType(g)` call and moved intact from the seventh to the eighth
+  metadata position. Dynamic statistic collection and ordering are unchanged.
+- The XLSX width array gained one metadata width at the same position and now
+  contains eight fixed widths before the dynamic statistic widths, matching the
+  updated shared data layout.
+- The production diff is localized to flat-export row/data construction, XLSX
+  column widths, and the CSV stat offset. Parsing, filters, dashboards,
+  classification rules, and box-score export code are unchanged.
+- A temporary local browser assertion harness was attempted, but headless
+  Chrome did not return DOM output reliably in this environment. It was removed
+  and no test-only code remains. The repository has no installed automated test
+  runner, so the verdict relies on direct control-flow and index-boundary
+  inspection plus the clean diff check.
 
 ## Optional Follow-ups
 
-- Preserve these checks in the permanent dependency-free test suite proposed
-  by Task 3. The executable browser harness used for this review was temporary
-  and removed after verification.
+- Preserve representative away/home, numeric-boundary, and XLSX-layout cases in
+  the dependency-free automated test suite proposed by Task 3.

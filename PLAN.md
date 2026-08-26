@@ -14,6 +14,53 @@ time.
 
 ## Tasks
 
+### 1C. Identify each exported team as home or away
+
+Status: complete
+
+Goal: Add one explicit flat-export column identifying whether each player-stat
+row belongs to the home team or the away team.
+
+Files:
+
+- `index.html`
+
+Implementation:
+
+- Carry the side (`away` or `home`) from the existing game-team iteration into
+  every row emitted by `buildFlatStats`.
+- Add a `team side` metadata column to `buildFlatStatsData`, adjacent to `team
+  name`, so both flat CSV and XLSX exports receive the same layout.
+- Update CSV numeric-stat column indexing and XLSX column widths for the added
+  metadata column.
+- Keep the change localized to flat-stat exports; do not alter team parsing,
+  game classification, box-score exports, dashboards, or filters.
+
+Acceptance checks:
+
+- Every flat CSV and XLSX player row has `away` for the game’s away team and
+  `home` for the game’s home team.
+- The CSV header and every data row have the same number of columns.
+- Numeric stat validation, valid negative values, malformed numeric blanking,
+  and text-field formula hardening still apply to the correct columns.
+- Existing `game type` values and dynamic statistic ordering remain unchanged.
+- `git diff --check` passes.
+
+Implementation notes:
+
+- Added `away`/`home` side labels to the existing flat-stat team iteration and
+  carried the label into each emitted player row.
+- Inserted `team side` immediately after `team name` in the shared CSV/XLSX
+  flat-data layout, added its XLSX width, and shifted CSV numeric-stat lookup
+  from seven to eight metadata columns.
+- Source-level acceptance checks passed for both side mappings, metadata and
+  row placement, the eight-column CSV numeric offset, unchanged numeric
+  validation and formula hardening, and continued use of `gameSeasonType`.
+  The production diff remains localized to flat-export construction.
+- `git diff --check` passes. A temporary browser assertion harness was removed
+  after headless Chrome could not complete reliably in the execution
+  environment; no test-only code remains.
+
 ### 1B. Identify regular-season and playoff games in flat exports
 
 Status: complete
@@ -282,25 +329,24 @@ Acceptance checks:
 
 ## Coder Handoff
 
-Implement Task 1B only.
+Implement Task 1C only.
 
 - Read `.agents/coder.md` and this file before editing.
-- Keep the patch localized to flat export row/data construction and the CSV
-  numeric-column offset.
-- Reuse `gameSeasonType`; do not redesign or broaden its classifier.
-- Exercise every acceptance scenario in Task 1B.
-- Mark Task 1B complete here only after those checks pass.
-- Record assumptions and checks directly under Task 1B.
+- Keep the patch localized to flat export row/data construction, XLSX column
+  widths, and the CSV numeric-column offset.
+- Use exactly one new `team side` column with `away`/`home` values.
+- Exercise every acceptance scenario in Task 1C.
+- Mark Task 1C complete here only after those checks pass.
+- Record assumptions and checks directly under Task 1C.
 
 ## Checker Handoff
 
-Review the coder's Task 1B changes only.
+Review the coder's Task 1C changes only.
 
 - Read `.agents/checker.md`, this file, and the final diff.
-- Verify every Task 1B acceptance check, including representative regular and
-  playoff events from the supplied fixture/export.
-- Confirm the inserted metadata column does not shift CSV numeric validation or
-  weaken text formula hardening.
+- Verify every Task 1C acceptance check using representative away and home rows.
+- Confirm the inserted metadata column does not shift CSV numeric validation,
+  weaken text formula hardening, or disturb the existing game-type column.
 - Confirm unrelated display, filtering, parsing, and box-score behavior is
   unchanged.
 - Write findings and test evidence to `REVIEW.md`; distinguish blocking findings

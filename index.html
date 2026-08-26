@@ -349,8 +349,8 @@ function buildFlatStats(games){
   const rows=[], statKeys=new Set();
   for(const g of games){
     const teams=[
-      {tid:g.away_tid,name:g.away_name},
-      {tid:g.home_tid,name:g.home_name}
+      {tid:g.away_tid,name:g.away_name,side:'away'},
+      {tid:g.home_tid,name:g.home_name,side:'home'}
     ];
     for(const team of teams){
       const teamPlayers=g.playerData[team.tid]||{};
@@ -363,7 +363,7 @@ function buildFlatStats(games){
           batting_g:isBattingAppearance(stats)?1:0,
           pitching_g:isPitchingAppearance(stats)?1:0
         };
-        const row={gameID:g.post_id,season:g.season,date:g.post_date,teamName:team.name,playerID:pid,playerName:pi.name,gameType:gameSeasonType(g),stats:exportStats};
+        const row={gameID:g.post_id,season:g.season,date:g.post_date,teamName:team.name,teamSide:team.side,playerID:pid,playerName:pi.name,gameType:gameSeasonType(g),stats:exportStats};
         visibleStatKeys(exportStats).forEach(k=>statKeys.add(k));
         rows.push(row);
       }
@@ -1193,12 +1193,13 @@ function exportCurrent(){
 
 function buildFlatStatsData(games, statValue=rawStatVal){
   const {rows,cols}=buildFlatStats(games);
-  const headers=['gameID','season','date','team name','player id','player name','game type',...cols];
+  const headers=['gameID','season','date','team name','team side','player id','player name','game type',...cols];
   return {cols,data:[headers,...rows.map(r=>[
     r.gameID,
     r.season,
     r.date,
     r.teamName,
+    r.teamSide,
     r.playerID,
     r.playerName,
     r.gameType,
@@ -1214,6 +1215,7 @@ function buildFlatStatsSheet(wb, games){
     {wch:10},
     {wch:12},
     {wch:24},
+    {wch:12},
     {wch:10},
     {wch:24},
     {wch:12},
@@ -1236,7 +1238,7 @@ function exportFlatStatsCSV(){
   if(!games.length) return;
   const {cols,data}=buildFlatStatsData(games,csvStatVal);
   const csv='\uFEFF'+data.map(row=>row.map((value,index)=>
-    csvCell(value,index>=7&&CSV_NUMERIC_STAT_FIELDS.has(cols[index-7]))
+    csvCell(value,index>=8&&CSV_NUMERIC_STAT_FIELDS.has(cols[index-8]))
   ).join(',')).join('\r\n');
   const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   const link=document.createElement('a');
