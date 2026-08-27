@@ -610,6 +610,15 @@ function getWP(item, tag){
   return el?el.textContent:'';
 }
 
+function teamIdFromTitleName(name, tids, teams){
+  const normalized=String(name).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  if(!normalized) return null;
+  return tids.find(tid=>{
+    const team=String(teams[tid]||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+    return team===normalized||team.endsWith(' '+normalized)||normalized.endsWith(' '+team);
+  })??null;
+}
+
 function parseXML(doc){
   const items = doc.getElementsByTagName('item');
   const teams={}, players={}, games=[];
@@ -653,7 +662,19 @@ function parseXML(doc){
       const r=phpUnserialize(resultsRaw);
       if(r&&typeof r==='object'){
         const tids=Object.keys(r).map(Number);
-        if(tids.length>=2){away_tid=tids[0];home_tid=tids[1];}
+        if(tids.length>=2){
+          // The event title is authoritative: "Away Team @ Home Team". Team
+          // names in titles can be shortened (for example, "Greeners").
+          const titleTeams=title.split(/\s+@\s+/);
+          const titleAway=titleTeams.length===2?teamIdFromTitleName(titleTeams[0],tids,teams):null;
+          const titleHome=titleTeams.length===2?teamIdFromTitleName(titleTeams[1],tids,teams):null;
+          if(titleAway!==null&&titleHome!==null&&titleAway!==titleHome){
+            away_tid=titleAway; home_tid=titleHome;
+          } else {
+            // SportsPress normally serializes event teams/results home first.
+            home_tid=tids[0]; away_tid=tids[1];
+          }
+        }
         results=r;
       }
     }
