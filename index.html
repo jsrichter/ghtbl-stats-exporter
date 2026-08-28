@@ -1,8 +1,10 @@
 
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GHTBL Stats Exporter</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500&display=swap');
@@ -88,8 +90,9 @@ select option{background:var(--navy);color:#fff}
 
 /* Game list */
 .game-list{display:flex;flex-direction:column;gap:6px}
-.game-row{display:flex;align-items:center;gap:10px;padding:.55rem .9rem;border:1px solid var(--border);border-radius:6px;background:var(--surface);cursor:pointer;transition:.12s;font-size:.83rem}
+.game-row{display:flex;align-items:center;gap:1rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.95rem 1rem;cursor:pointer;transition:all .15s;appearance:none;width:100%;text-align:left;color:inherit;font:inherit}
 .game-row:hover{border-color:rgba(255,255,255,.45);background:var(--surface2)}
+.game-row:focus-visible,.btn:focus-visible,.view-tab:focus-visible,.stats-sort:focus-visible,select:focus-visible,input[type=date]:focus-visible,.upload-zone input:focus-visible+*{outline:2px solid var(--accent);outline-offset:2px}
 .game-row.selected{border-color:var(--accent);background:rgba(255,255,255,.08)}
 .game-date{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--muted);width:82px;flex-shrink:0}
 .game-matchup{flex:1;font-weight:500}
@@ -233,6 +236,10 @@ const STAT_ALIASES = {
 const PITCH_COLS   = ['pitcher_ip','pitcher_h','pitcher_r','pitcher_er','pitcher_bb','pitcher_so','pitcher_hr','pitcher_hbp','pitcher_gs','pitcher_w','pitcher_l','pitcher_sv','pitcher_cg','pitcher_sho'];
 const PITCH_LABELS = {pitcher_ip:'IP',pitcher_h:'H',pitcher_r:'R',pitcher_er:'ER',pitcher_bb:'BB',pitcher_so:'SO',pitcher_hr:'HR',pitcher_hbp:'HBP',pitcher_gs:'GS',pitcher_w:'W',pitcher_l:'L',pitcher_sv:'SV',pitcher_cg:'CG',pitcher_sho:'SHO'};
 const CSV_NUMERIC_STAT_FIELDS = new Set(['batting_g','pitching_g',...BATTING_COLS,...PITCH_COLS]);
+const DEFAULT_FILTERS = {season:'', seasonType:'', team:'', dateFrom:'', dateTo:''};
+const FLAT_STATS_HEADERS = ['gameID','season','date','team name','team side','player id','player name','game type'];
+const FLAT_STATS_METADATA_COLUMNS = FLAT_STATS_HEADERS.length;
+const BOX_SCORE_EXPORT_LIMIT = 50;
 
 let S = {
   step:'upload', // upload | list
@@ -241,7 +248,7 @@ let S = {
   games: [],
   players: {}, // pid -> {name,pos,num,bt}
   teams: {},   // tid -> name
-  filters: {season:'', seasonType:'', team:'', dateFrom:'', dateTo:''},
+  filters: {...DEFAULT_FILTERS},
   selectedGame: null,
   loading: false,
   loadMsg: '',
@@ -253,6 +260,19 @@ let S = {
 
 function el(id){ return document.getElementById(id); }
 function render(){ renderToolbar(); renderPanel(); }
+function resetSelectedGame(){ S.selectedGame=null; }
+function selectGameById(postId){ S.selectedGame=S.games.find(game=>game.post_id===postId)||null; }
+function setView(view){ S.view=view; resetSelectedGame(); render(); }
+function updateFilters(nextFilters, resetGame=true){
+  S.filters={...S.filters,...nextFilters};
+  if(resetGame) resetSelectedGame();
+  render();
+}
+function clearFilters(){
+  S.filters={...DEFAULT_FILTERS};
+  resetSelectedGame();
+  render();
+}
 
 function statVal(stats, field){
   const keys=[field,...(STAT_ALIASES[field]||[])];
@@ -757,36 +777,36 @@ function renderToolbar(){
   const f=S.filters;
   t.innerHTML=`<div class="toolbar">
     <div class="view-tabs rounded-lg bg-black/20 p-1 ring-1 ring-white/10" role="tablist">
-      <button class="view-tab rounded-md px-3 py-1.5 transition ${S.view==='games'?'active shadow-sm':'hover:bg-white/10'}" onclick="S.view='games';S.selectedGame=null;render()">Games</button>
-      <button class="view-tab rounded-md px-3 py-1.5 transition ${S.view==='stats'?'active shadow-sm':'hover:bg-white/10'}" onclick="S.view='stats';S.selectedGame=null;render()">Stats</button>
-      <button class="view-tab rounded-md px-3 py-1.5 transition ${S.view==='flat'?'active shadow-sm':'hover:bg-white/10'}" onclick="S.view='flat';S.selectedGame=null;render()">Flat stats</button>
+      <button class="view-tab rounded-md px-3 py-1.5 transition ${S.view==='games'?'active shadow-sm':'hover:bg-white/10'}" type="button" role="tab" aria-selected="${S.view==='games'}" onclick="setView('games')">Games</button>
+      <button class="view-tab rounded-md px-3 py-1.5 transition ${S.view==='stats'?'active shadow-sm':'hover:bg-white/10'}" type="button" role="tab" aria-selected="${S.view==='stats'}" onclick="setView('stats')">Stats</button>
+      <button class="view-tab rounded-md px-3 py-1.5 transition ${S.view==='flat'?'active shadow-sm':'hover:bg-white/10'}" type="button" role="tab" aria-selected="${S.view==='flat'}" onclick="setView('flat')">Flat stats</button>
     </div>
     <span class="toolbar-label">Season</span>
-    <select onchange="S.filters.season=this.value;S.selectedGame=null;render()">
+    <select aria-label="Filter by season" onchange="updateFilters({season:this.value})">
       <option value="">All seasons</option>
       ${S.availableSeasons.map(s=>`<option value="${s}" ${f.season===s?'selected':''}>${s}</option>`).join('')}
     </select>
     <span class="toolbar-label">Type</span>
-    <select onchange="S.filters.seasonType=this.value;S.selectedGame=null;render()">
+    <select aria-label="Filter by game type" onchange="updateFilters({seasonType:this.value})">
       <option value="">All games</option>
       <option value="regular" ${f.seasonType==='regular'?'selected':''}>Regular season</option>
       <option value="playoff" ${f.seasonType==='playoff'?'selected':''}>Playoffs</option>
     </select>
     <span class="toolbar-label">Team</span>
-    <select onchange="S.filters.team=this.value;S.selectedGame=null;render()">
+    <select aria-label="Filter by team" onchange="updateFilters({team:this.value})">
       <option value="">All teams</option>
       ${S.availableTeams.map(t=>`<option value="${escH(t)}" ${f.team===t?'selected':''}>${escH(t)}</option>`).join('')}
     </select>
     <span class="toolbar-label">From</span>
-    <input type="date" value="${f.dateFrom}" onchange="S.filters.dateFrom=this.value;render()">
+    <input type="date" aria-label="Filter from date" value="${f.dateFrom}" onchange="updateFilters({dateFrom:this.value},false)">
     <span class="toolbar-label">To</span>
-    <input type="date" value="${f.dateTo}" onchange="S.filters.dateTo=this.value;render()">
-    <button class="btn btn-ghost btn-sm rounded-md ring-1 ring-white/10 hover:bg-white/10" onclick="S.filters={season:'',seasonType:'',team:'',dateFrom:'',dateTo:''};S.selectedGame=null;render()"><i class="ti ti-refresh" aria-hidden="true"></i></button>
-    ${S.selectedGame?`<button class="btn btn-ghost btn-sm rounded-md ring-1 ring-white/10 hover:bg-white/10" onclick="S.selectedGame=null;render()"><i class="ti ti-list" aria-hidden="true"></i> All games</button>`:''}
+    <input type="date" aria-label="Filter to date" value="${f.dateTo}" onchange="updateFilters({dateTo:this.value},false)">
+    <button class="btn btn-ghost btn-sm rounded-md ring-1 ring-white/10 hover:bg-white/10" type="button" aria-label="Clear all filters" onclick="clearFilters()"><i class="ti ti-refresh" aria-hidden="true"></i></button>
+    ${S.selectedGame?`<button class="btn btn-ghost btn-sm rounded-md ring-1 ring-white/10 hover:bg-white/10" type="button" onclick="resetSelectedGame();render()"><i class="ti ti-list" aria-hidden="true"></i> All games</button>`:''}
     ${S.view==='flat'
-      ? `<button class="btn btn-accent btn-sm rounded-md shadow-sm shadow-black/20 hover:opacity-90" onclick="exportFlatStats()" ${getFiltered().length===0?'disabled':''}><i class="ti ti-file-spreadsheet" aria-hidden="true"></i> XLSX</button>
-         <button class="btn btn-ghost btn-sm rounded-md ring-1 ring-white/10 hover:bg-white/10" onclick="exportFlatStatsCSV()" ${getFiltered().length===0?'disabled':''}><i class="ti ti-file-type-csv" aria-hidden="true"></i> CSV</button>`
-      : S.selectedGame?`<button class="btn btn-accent btn-sm rounded-md shadow-sm shadow-black/20 hover:opacity-90" onclick="exportCurrent()"><i class="ti ti-download" aria-hidden="true"></i> Export</button>`:`<button class="btn btn-accent btn-sm rounded-md shadow-sm shadow-black/20 hover:opacity-90" onclick="exportAll()" ${getFiltered().length===0?'disabled':''}><i class="ti ti-download" aria-hidden="true"></i> Export all</button>`}
+      ? `<button class="btn btn-accent btn-sm rounded-md shadow-sm shadow-black/20 hover:opacity-90" type="button" onclick="exportFlatStats()" ${getFiltered().length===0?'disabled':''}><i class="ti ti-file-spreadsheet" aria-hidden="true"></i> XLSX</button>
+         <button class="btn btn-ghost btn-sm rounded-md ring-1 ring-white/10 hover:bg-white/10" type="button" onclick="exportFlatStatsCSV()" ${getFiltered().length===0?'disabled':''}><i class="ti ti-file-type-csv" aria-hidden="true"></i> CSV</button>`
+      : S.selectedGame?`<button class="btn btn-accent btn-sm rounded-md shadow-sm shadow-black/20 hover:opacity-90" type="button" onclick="exportCurrent()"><i class="ti ti-download" aria-hidden="true"></i> Export</button>`:`<button class="btn btn-accent btn-sm rounded-md shadow-sm shadow-black/20 hover:opacity-90" type="button" onclick="exportAll()" ${getFiltered().length===0?'disabled':''}><i class="ti ti-download" aria-hidden="true"></i> Export all</button>`}
   </div>`;
 }
 
@@ -804,14 +824,14 @@ function renderUpload(){
   return `
   <p style="font-size:.83rem;color:var(--muted);margin-bottom:1.25rem">Upload a single WordPress XML export that contains both game events and player records (sp_event + sp_player + sp_team post types).</p>
   <div class="upload-zone" id="dropzone">
-    <input type="file" accept=".xml" onchange="handleFile(event)">
+    <input type="file" accept=".xml" aria-label="Upload WordPress SportsPress XML export" onchange="handleFile(event)">
     ${S.loading
-      ? `<div class="upload-icon"><div class="spinner"></div></div><div class="upload-title">${S.loadMsg}</div>`
+      ? `<div aria-live="polite"><div class="upload-icon"><div class="spinner"></div></div><div class="upload-title">${S.loadMsg}</div></div>`
       : `<i class="ti ti-file-upload upload-icon" aria-hidden="true"></i>
          <div class="upload-title">Drop WordPress XML or click to browse</div>
          <div class="upload-sub">Single export file containing events, players &amp; teams</div>
          <span class="upload-badge">sp_event · sp_player · sp_team</span>
-         ${S.loadError?`<div class="upload-sub" style="color:#ff9b9b;margin-top:.75rem">${escH(S.loadError)}</div>`:''}`}
+         ${S.loadError?`<div class="upload-sub" style="color:#ff9b9b;margin-top:.75rem" role="alert">${escH(S.loadError)}</div>`:''}`}
   </div>`;
 }
 
@@ -823,13 +843,13 @@ function renderGameList(){
   <div class="game-count">${games.length} game${games.length!==1?'s':''} · click to view box score</div>
   <div class="game-list">
     ${games.map(g=>`
-    <div class="game-row" onclick="S.selectedGame=S.games.find(x=>x.post_id==='${g.post_id}');render()">
+    <button class="game-row" type="button" onclick="selectGameById('${g.post_id}');render()" aria-label="View box score for ${escH(g.away_name)} at ${escH(g.home_name)} on ${g.post_date}">
       <span class="game-date">${g.post_date}</span>
       <span class="game-matchup">${escH(g.away_name)} @ ${escH(g.home_name)}</span>
       <span class="game-score">${g.away_r!==''&&g.home_r!==''?g.away_r+'-'+g.home_r:g.sp_status==='ok'?'—':'TBD'}</span>
       <span class="game-venue">${escH(g.venue)}</span>
       <i class="ti ti-chevron-right" style="color:var(--muted);font-size:.9rem" aria-hidden="true"></i>
-    </div>`).join('')}
+    </button>`).join('')}
   </div>`;
 }
 
@@ -1214,7 +1234,7 @@ function exportCurrent(){
 
 function buildFlatStatsData(games, statValue=rawStatVal){
   const {rows,cols}=buildFlatStats(games);
-  const headers=['gameID','season','date','team name','team side','player id','player name','game type',...cols];
+  const headers=[...FLAT_STATS_HEADERS,...cols];
   return {cols,data:[headers,...rows.map(r=>[
     r.gameID,
     r.season,
@@ -1259,7 +1279,7 @@ function exportFlatStatsCSV(){
   if(!games.length) return;
   const {cols,data}=buildFlatStatsData(games,csvStatVal);
   const csv='\uFEFF'+data.map(row=>row.map((value,index)=>
-    csvCell(value,index>=8&&CSV_NUMERIC_STAT_FIELDS.has(cols[index-8]))
+    csvCell(value,index>=FLAT_STATS_METADATA_COLUMNS&&CSV_NUMERIC_STAT_FIELDS.has(cols[index-FLAT_STATS_METADATA_COLUMNS]))
   ).join(',')).join('\r\n');
   const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   const link=document.createElement('a');
@@ -1285,10 +1305,10 @@ function exportAll(){
   buildFlatStatsSheet(wb,games);
 
   // One sheet per game (limit to 50 to avoid huge files)
-  const limit=Math.min(games.length,50);
+  const limit=Math.min(games.length,BOX_SCORE_EXPORT_LIMIT);
   for(let i=0;i<limit;i++) buildBoxScoreSheet(wb,games[i]);
-  if(games.length>50){
-    const wsNote=XLSX.utils.aoa_to_sheet([[`Note: Only first 50 of ${games.length} box scores included. Use season/team filters to export subsets.`]]);
+  if(games.length>BOX_SCORE_EXPORT_LIMIT){
+    const wsNote=XLSX.utils.aoa_to_sheet([[`Note: Only first ${BOX_SCORE_EXPORT_LIMIT} of ${games.length} box scores included. Use season/team filters to export subsets.`]]);
     XLSX.utils.book_append_sheet(wb,wsNote,'_Note');
   }
 
