@@ -327,6 +327,104 @@ Acceptance checks:
 - Users can tell which features require network access.
 - A missing XLSX dependency does not fail with an unexplained runtime exception.
 
+### 6. Publish comprehensive user and contributor documentation
+
+Status: complete
+
+Goal: Make the project understandable and usable by GHTBL administrators,
+other SportsPress Baseball leagues, analysts, and prospective contributors.
+
+Files:
+
+- `README.md`
+- New `DATA_DICTIONARY.md`
+- New `METHODOLOGY.md`
+- New `SPORTSPRESS_RECOMMENDATIONS.md`
+
+Implementation:
+
+- Rewrite the README around the primary workflow: export all WordPress content,
+  open the hosted or local app, upload the XML, filter the results, and export a
+  flat CSV for Access, Python, R, or another analysis tool.
+- Explain that the app is a lightweight, client-side interpreter for WordPress
+  WXR exports containing SportsPress and SportsPress Baseball data.
+- Document the live site, local and GitHub Pages use, supported input records,
+  views, filters, export types, known limitations, privacy model, CDN/network
+  requirements, Chrome-only testing status, troubleshooting, contributing, and
+  GitHub Issues support.
+- Describe aggregate statistics and leaderboards as exploratory current behavior,
+  not authoritative league results; do not imply that fixed nine-inning pitching
+  rates are correct for every league.
+- Add a data dictionary for flat-export metadata, derived appearance fields, and
+  dynamically discovered SportsPress statistic columns.
+- Add a methodology document covering parsing, team-side and playoff inference,
+  appearance detection, numeric cleanup, formulas, qualification thresholds, and
+  other transformations or assumptions.
+- Add a constructive recommendations document for ThemeBoy/SportsPress describing
+  export shortcomings and improvements that would make baseball data portable.
+- State the intended MIT license, credit `jsrichter`, invite pull requests and
+  cross-league compatibility reports, and ask users to provide descriptions rather
+  than attaching XML fixtures containing league data.
+- Include a concise roadmap summary in the README and link to this file for detail.
+
+Acceptance checks:
+
+- A nontechnical league administrator can follow the documented export/upload/CSV
+  workflow without reading source code.
+- Current behavior is separated clearly from roadmap work and known limitations.
+- The README does not claim broad browser or cross-league compatibility that has
+  not been tested.
+- Privacy wording says XML is processed in memory and discarded on refresh/close,
+  while also disclosing requests to public CDN providers and the sensitivity of
+  downloaded player data.
+- Documentation does not promise a missing-record warning that is not implemented.
+- All internal links resolve and `git diff --check` passes.
+
+Implementation notes:
+
+- Rewrote the README around the all-content export, hosted/local upload,
+  filtering, and flat CSV workflow, with privacy, CDN, compatibility,
+  troubleshooting, contribution, license-intent, and roadmap guidance.
+- Added a flat-export data dictionary, implementation-based methodology, and
+  constructive SportsPress portability recommendations.
+- Separated current behavior from roadmap work, including inferred sides and
+  game type, missing-player fallback without a warning, nine-inning exploratory
+  rates, ten-inning parsing, and the 50-game box-sheet limit.
+
+### 7. Improve portability, validation, and league-specific behavior
+
+Status: proposed
+
+Goal: Remove assumptions that are reliable for GHTBL but may be incorrect for
+other SportsPress Baseball leagues.
+
+Files:
+
+- `index.html`
+- `README.md`
+- `METHODOLOGY.md`
+
+Implementation:
+
+- Validate home/away identification and report when title-based matching fails.
+- Show visible warnings for referenced player or team records missing from the
+  WordPress export.
+- Rework the 50-game per-sheet bulk-export limit and support games longer than 10
+  innings.
+- Remove or redesign calculated summary rates and leaderboards so the app does not
+  silently impose nine-inning formulas or GHTBL qualification rules on other
+  leagues.
+- Test parsing and exports against current SportsPress Baseball installations from
+  leagues other than GHTBL, using locally sanitized reproduction data only.
+
+Acceptance checks:
+
+- Users can distinguish exact source values from inferred or calculated values.
+- League-specific calculation rules are configurable, explicitly selected, or not
+  calculated.
+- Ambiguous and incomplete source records produce actionable feedback.
+- Long games and large filtered exports do not silently omit expected output.
+
 ## Coder Handoff
 
 Implement Task 1C only.
