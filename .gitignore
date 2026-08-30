@@ -1,0 +1,12 @@
+# Local agent and Codex configuration
+/.agents/
+/.codex/
+
+# macOS metadata
+.DS_Store
+
+# Editor workspace files
+.idea/
+.vscode/
+*.swp
+*~
